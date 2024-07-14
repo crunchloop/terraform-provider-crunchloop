@@ -31,4 +31,4 @@ provider "crunchloop" {
 
 ### Required
 
-- `url` (String) URL for the Crunchloop Cloud instance
+- `url` (String) URL for the Crunchloop instance

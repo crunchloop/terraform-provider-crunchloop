@@ -21,7 +21,7 @@ func NewVmiDataSource() datasource.DataSource {
 
 // VmiDataSource defines the data source implementation.
 type VmiDataSource struct {
-	client *client.Client
+	client *client.ClientWithResponses
 }
 
 // VmiDataSourceModel describes the data source data model.
@@ -58,7 +58,7 @@ func (d *VmiDataSource) Configure(ctx context.Context, req datasource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*client.Client)
+	client, ok := req.ProviderData.(*client.ClientWithResponses)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -78,19 +78,33 @@ func (d *VmiDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	Vmi, _, err := d.client.VmisService.GetVmiByName(data.Name.ValueString())
+	response, err := d.client.ListVmisWithResponse(ctx)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Unable to read Vmi, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Unable to read vmi, got error: %s", err),
+		)
 		return
 	}
 
-	data.Id = types.StringValue(strconv.Itoa(int(Vmi.Id)))
-	data.Name = types.StringValue(Vmi.Name)
+	for _, vmi := range *response.JSON200.Data {
+		if *vmi.Name == data.Name.ValueString() {
+			data.Id = types.StringValue(strconv.Itoa(int(*vmi.Id)))
+			data.Name = types.StringValue(*vmi.Name)
 
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "read Vmi data source")
+			// Write logs using the tflog package
+			// Documentation: https://terraform.io/plugin/log
+			tflog.Trace(ctx, "read Vmi data source")
 
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+			// Save data into Terraform state
+			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+			return
+		}
+	}
+
+	resp.Diagnostics.AddError(
+		"API Error",
+		fmt.Sprintf("Vmi with name %s was not found", data.Name.ValueString()),
+	)
 }

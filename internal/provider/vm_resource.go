@@ -27,7 +27,7 @@ func NewVmResource() resource.Resource {
 
 // VmResource defines the resource implementation.
 type VmResource struct {
-	client *client.Client
+	client *client.ClientWithResponses
 }
 
 // VmResourceModel describes the resource data model.
@@ -110,7 +110,7 @@ func (r *VmResource) Configure(ctx context.Context, req resource.ConfigureReques
 		return
 	}
 
-	client, ok := req.ProviderData.(*client.Client)
+	client, ok := req.ProviderData.(*client.ClientWithResponses)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -134,22 +134,25 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	createOptions := client.CreateVmOptions{
+	createOptions := client.CreateVmJSONRequestBody{
 		Name:                    data.Name.ValueString(),
-		MemoryMegabytes:         data.MemoryMegabytes.ValueInt64(),
-		Cores:                   data.Cores.ValueInt64(),
-		VmiId:                   data.VmiId.ValueInt64(),
-		HostId:                  data.HostId.ValueInt64(),
-		RootVolumeSizeGigabytes: data.RootVolumeSizeGigabytes.ValueInt64(),
+		MemoryMegabytes:         int(data.MemoryMegabytes.ValueInt64()),
+		Cores:                   int(data.Cores.ValueInt64()),
+		VmiId:                   int(data.VmiId.ValueInt64()),
+		HostId:                  int(data.HostId.ValueInt64()),
+		RootVolumeSizeGigabytes: int(data.RootVolumeSizeGigabytes.ValueInt64()),
 	}
 
-	vm, _, err := r.client.VmsService.CreateVm(&createOptions)
+	vm, err := r.client.CreateVmWithResponse(ctx, createOptions)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create VM: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to create vm: %s", err),
+		)
 		return
 	}
 
-	data.vmModelToStateResource(vm)
+	data.vmModelToStateResource(vm.JSON201)
 
 	// Write logs using the tflog package
 	// Documentation: https://terraform.io/plugin/log
@@ -159,9 +162,12 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	// User expects the VM to be running, so wait for it to be running
-	err = waitForVmStatus(ctx, r.client, int(vm.Id), "running")
+	err = waitForVmStatus(ctx, r.client, int(*vm.JSON201.Id), "running")
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to wait for VM to be running: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed while waiting for vm to be running: %s", err),
+		)
 	}
 }
 
@@ -177,13 +183,16 @@ func (r *VmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 	// Parse the vm id
 	id, _ := strconv.Atoi(data.Id.ValueString())
 
-	vm, _, err := r.client.VmsService.GetVm(id)
+	vm, err := r.client.GetVmWithResponse(ctx, id)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get VM: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to get vm: %s", err),
+		)
 		return
 	}
 
-	data.vmModelToStateResource(vm)
+	data.vmModelToStateResource(vm.JSON200)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -216,15 +225,21 @@ func (r *VmResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 	// Parse the vm id
 	id, _ := strconv.Atoi(data.Id.ValueString())
 
-	_, err := r.client.VmsService.DeleteVm(id)
+	_, err := r.client.DeleteVmWithResponse(ctx, id)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to delete VM: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to delete vm: %s", err),
+		)
 		return
 	}
 
 	err = waitForVmDeletion(ctx, r.client, id)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to delete VM: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed while waiting for vm to get deleted: %s", err),
+		)
 		return
 	}
 }
@@ -233,17 +248,17 @@ func (r *VmResource) ImportState(ctx context.Context, req resource.ImportStateRe
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (d *VmResourceModel) vmModelToStateResource(vm *client.Vm) {
-	d.Id = types.StringValue(strconv.Itoa(int(vm.Id)))
-	d.Name = types.StringValue(vm.Name)
-	d.MemoryMegabytes = types.Int64Value(bytesToMegabytes(vm.MemoryBytes))
-	d.Cores = types.Int64Value(vm.Cores)
-	d.VmiId = types.Int64Value(vm.Vmi.Id)
-	d.HostId = types.Int64Value(vm.Host.Id)
-	d.RootVolumeSizeGigabytes = types.Int64Value(bytesToGigabytes(vm.RootVolume.SizeBytes))
+func (d *VmResourceModel) vmModelToStateResource(vm *client.VirtualMachine) {
+	d.Id = types.StringValue(strconv.Itoa(int(*vm.Id)))
+	d.Name = types.StringValue(*vm.Name)
+	d.MemoryMegabytes = types.Int64Value(int64(bytesToMegabytes(*vm.MemoryBytes)))
+	d.Cores = types.Int64Value(int64(*vm.Cores))
+	d.VmiId = types.Int64Value(int64(*vm.Vmi.Id))
+	d.HostId = types.Int64Value(int64(*vm.Host.Id))
+	d.RootVolumeSizeGigabytes = types.Int64Value(int64(bytesToGigabytes(int64(*vm.RootVolume.SizeBytes))))
 }
 
-func bytesToMegabytes(bytes int64) int64 {
+func bytesToMegabytes(bytes int) int {
 	return bytes / 1024 / 1024
 }
 
@@ -251,7 +266,7 @@ func bytesToGigabytes(bytes int64) int64 {
 	return bytes / 1024 / 1024 / 1024
 }
 
-func waitForVmDeletion(ctx context.Context, client *client.Client, id int) error {
+func waitForVmDeletion(ctx context.Context, client *client.ClientWithResponses, id int) error {
 	timeout := time.After(5 * time.Minute)    // 5 minutes timeout
 	ticker := time.NewTicker(5 * time.Second) // Check every 10 seconds
 	defer ticker.Stop()
@@ -263,12 +278,12 @@ func waitForVmDeletion(ctx context.Context, client *client.Client, id int) error
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for VM status to get deleted")
 		case <-ticker.C:
-			_, resp, err := client.VmsService.GetVm(id)
+			vmResponse, err := client.GetVmWithResponse(ctx, id)
 			if err != nil {
 				return err
 			}
 
-			if resp.StatusCode == 404 {
+			if vmResponse.StatusCode() == 404 {
 				return nil
 			}
 		}

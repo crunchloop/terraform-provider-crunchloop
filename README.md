@@ -1,3 +1,3 @@
-# Crunchloop Cloud Terraform Provider
+# Crunchloop Terraform Provider
 
 TODO

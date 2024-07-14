@@ -1,0 +1,346 @@
+openapi: 3.1.0
+info:
+  title: Crunchloop Cloud Management API
+  description: API for managing Crunchloop Cloud resources
+  version: 0.0.1
+servers:
+  - url: https://cloud.crunchloop.io
+paths:
+  api/v1/vms:
+    post:
+      summary: Create a new virtual machine
+      operationId: createVm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: swagger-vm
+                host_id:
+                  type: integer
+                  example: 10
+                vmi_id:
+                  type: integer
+                  example: 20
+                cores:
+                  type: integer
+                  example: 1
+                  minimum: 1
+                  maximum: 2
+                memory_megabytes:
+                  type: integer
+                  example: 1024
+                  minimum: 128
+                  maximum: 1024
+                root_volume_size_gigabytes:
+                  type: integer
+                  example: 10
+                  minimum: 5
+                  maximum: 50
+                ssh_key:
+                  type: string
+                  example: ssh-rsa AAAAB3NzaC1y....
+              required:
+                - name
+                - host_id
+                - vmi_id
+                - cores
+                - memory_megabytes
+                - root_volume_size_gigabytes
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  api/v1/vms/{id}:
+    get:
+      summary: Get virtual machine
+      operationId: getVm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+              example:
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+    delete:
+      summary: Delete a virtual machine
+      operationId: deleteVm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: No Content
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  api/v1/vms/{id}/start:
+    post:
+      summary: Start a virtual machine
+      operationId: startVm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  api/v1/vms/{id}/stop:
+    post:
+      summary: Stop a virtual machine
+      operationId: stopVm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  api/v1/hosts:
+    get:
+      summary: List hosts
+      operationId: listHosts
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostCollection'
+  api/v1/vmis:
+    get:
+      summary: List virtual machine images
+      operationId: listVmis
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachineImageCollection'
+components:
+  schemas:
+    VirtualMachine:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        object:
+          type: string
+          const: vm
+        name:
+          type: string
+          example: swagger-vm
+        status:
+          type: string
+          example: running
+          enum:
+            - stopped
+            - creating
+            - running
+            - suspended
+            - deleting
+        cores:
+          type: integer
+          example: 1
+        memory_bytes:
+          type: integer
+          example: 1073741824
+        vmi:
+          $ref: '#/components/schemas/VirtualMachineImage'
+        host:
+          $ref: '#/components/schemas/Host'
+        root_volume:
+          $ref: '#/components/schemas/Volume'
+        nic:
+          $ref: '#/components/schemas/NetworkInterface'
+    Host:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        object:
+          type: string
+          const: host
+        name:
+          type: string
+          example: swagger-host
+        status:
+          type: string
+          enum:
+            - online
+            - offline
+          example: online
+    VirtualMachineImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        object:
+          type: string
+          const: vmi
+        name:
+          type: string
+          exameple: ubuntu
+    Volume:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        object:
+          type: string
+          const: volume
+        name:
+          type: string
+          example: swagger-vol
+        size_bytes:
+          type: integer
+          example: 10737418240
+        status:
+          type: string
+          enum:
+           - creating
+           - in_use
+           - available
+           - deleting
+          example: in_use
+
+    NetworkInterface:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        object:
+          type: string
+          const: nic
+        dhcp:
+          type: boolean
+          example: true
+        ip_address:
+          type: string
+          example: 192.168.1.2
+    HostCollection:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        has_more:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Host'
+    VirtualMachineImageCollection:
+      type: object
+      properties:
+        object:
+          type: string
+          const: list
+        has_more:
+          type: boolean
+          example: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VirtualMachineImage'
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          enum:
+            - record_not_found
+            - input_error
+          example: record_not_found
+        message:
+          type: string
+      required:
+        - code
+        - message

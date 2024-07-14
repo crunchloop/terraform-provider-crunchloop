@@ -19,8 +19,6 @@ import (
 // can be customized.
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name crunchloop
 
-//go:generate go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen ../../github.com/bilby91/cloud/docs/api/v1/openapi.yaml
-
 var (
 	// these will be set by the goreleaser configuration
 	// to appropriate values for the compiled binary.

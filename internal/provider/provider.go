@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/crunchloop/terraform-provider-crunchloop/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -39,7 +40,7 @@ func (p *CrunchloopProvider) Schema(ctx context.Context, req provider.SchemaRequ
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"url": schema.StringAttribute{
-				MarkdownDescription: "URL for the Crunchloop Cloud instance",
+				MarkdownDescription: "URL for the Crunchloop instance",
 				Required:            true,
 			},
 		},
@@ -56,11 +57,24 @@ func (p *CrunchloopProvider) Configure(ctx context.Context, req provider.Configu
 	}
 
 	// Example client configuration for data sources and resources
-	client, err := client.NewClient(client.WithBaseURL(data.Url.ValueString()))
+	// client, err := client.NewClient(client.WithBaseURL(data.Url.ValueString()))
+	client, err := client.NewClientWithResponses(
+		data.Url.ValueString(),
+		client.WithRequestEditorFn(
+			func(ctx context.Context, req *http.Request) error {
+				req.Header.Set("Accept", "application/json")
+
+				return nil
+			},
+		),
+	)
 
 	if err != nil {
 		tflog.Info(ctx, err.Error())
-		resp.Diagnostics.AddError("Failed to create Crunchloop Cloud client", "")
+		resp.Diagnostics.AddError(
+			"Configuration Error",
+			"Failed to create Crunchloop client",
+		)
 		return
 	}
 

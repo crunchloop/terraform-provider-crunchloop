@@ -21,7 +21,7 @@ func NewHostDataSource() datasource.DataSource {
 
 // HostDataSource defines the data source implementation.
 type HostDataSource struct {
-	client *client.Client
+	client *client.ClientWithResponses
 }
 
 // HostDataSourceModel describes the data source data model.
@@ -58,12 +58,12 @@ func (d *HostDataSource) Configure(ctx context.Context, req datasource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(*client.Client)
+	client, ok := req.ProviderData.(*client.ClientWithResponses)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.ClientWithResponses, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
@@ -78,19 +78,31 @@ func (d *HostDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
-	host, _, err := d.client.HostsService.GetHostByName(data.Name.ValueString())
+	response, err := d.client.ListHostsWithResponse(ctx)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Unable to read host, got error: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Unable to read host, got error: %s", err),
+		)
 		return
 	}
 
-	data.Id = types.StringValue(strconv.Itoa(int(host.Id)))
-	data.Name = types.StringValue(host.Name)
+	for _, host := range *response.JSON200.Data {
+		if *host.Name == data.Name.ValueString() {
+			data.Id = types.StringValue(strconv.Itoa(int(*host.Id)))
+			data.Name = types.StringValue(*host.Name)
 
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "read host data source")
+			tflog.Trace(ctx, "read host data source")
 
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+			// Save data into Terraform state
+			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+			return
+		}
+	}
+
+	resp.Diagnostics.AddError(
+		"API Error",
+		fmt.Sprintf("Host with name %s was not found", data.Name.ValueString()),
+	)
 }

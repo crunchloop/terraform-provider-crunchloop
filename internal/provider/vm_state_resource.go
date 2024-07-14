@@ -26,7 +26,7 @@ func NewVmStateResource() resource.Resource {
 
 // VmStateResource defines the resource implementation.
 type VmStateResource struct {
-	client *client.Client
+	client *client.ClientWithResponses
 }
 
 // VmStateResourceModel describes the resource data model.
@@ -66,7 +66,7 @@ func (r *VmStateResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*client.Client)
+	client, ok := req.ProviderData.(*client.ClientWithResponses)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -114,14 +114,16 @@ func (r *VmStateResource) Read(ctx context.Context, req resource.ReadRequest, re
 	// Parse the vm id
 	id, _ := strconv.Atoi(data.VmId.ValueString())
 
-	vm, _, err := r.client.VmsService.GetVm(id)
+	vmResponse, err := r.client.GetVmWithResponse(ctx, id)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get VM: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error", fmt.Sprintf("Failed to get vm: %s", err),
+		)
 		return
 	}
 
-	data.VmId = types.StringValue(strconv.Itoa(int(vm.Id)))
-	data.Status = types.StringValue(vm.Status)
+	data.VmId = types.StringValue(strconv.Itoa(int(*vmResponse.JSON200.Id)))
+	data.Status = types.StringValue(string(*vmResponse.JSON200.Status))
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -141,40 +143,52 @@ func (r *VmStateResource) Update(ctx context.Context, req resource.UpdateRequest
 	id, _ := strconv.Atoi(data.VmId.ValueString())
 
 	// Get current status of vm
-	vm, _, err := r.client.VmsService.GetVm(id)
+	vmResponse, err := r.client.GetVmWithResponse(ctx, id)
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get VM: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to get vm: %s", err),
+		)
 		return
 	}
 
-	if data.Status.String() == "running" && vm.Status == "running" {
+	if data.Status.String() == string(client.VirtualMachineStatusRunning) && *vmResponse.JSON200.Status == client.VirtualMachineStatusRunning {
 		tflog.Debug(ctx, fmt.Sprintf("Vm is already running: %s", data.VmId.String()))
 		return
 	}
 
-	if data.Status.String() == "stopped" && vm.Status == "stopped" {
+	if data.Status.String() == string(client.VirtualMachineStatusStopped) && *vmResponse.JSON200.Status == client.VirtualMachineStatusStopped {
 		tflog.Debug(ctx, fmt.Sprintf("Vm is already stopped: %s", data.VmId.String()))
 		return
 	}
 
 	switch data.Status.ValueString() {
 	case "stopped":
-		_, _, err = r.client.VmsService.StopVm(id)
+		_, err = r.client.StopVmWithResponse(ctx, id)
 		if err != nil {
-			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to stop VM: %s", err))
+			resp.Diagnostics.AddError(
+				"API Error",
+				fmt.Sprintf("Failed to stop vm: %s", err),
+			)
 			return
 		}
 	case "running":
-		_, _, err = r.client.VmsService.StartVm(id)
+		_, err = r.client.StartVmWithResponse(ctx, id)
 		if err != nil {
-			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to start VM: %s", err))
+			resp.Diagnostics.AddError(
+				"API Error",
+				fmt.Sprintf("Failed to start vm: %s", err),
+			)
 			return
 		}
 	}
 
-	err = waitForVmStatus(ctx, r.client, id, data.Status.ValueString())
+	err = waitForVmStatus(ctx, r.client, id, client.VirtualMachineStatus(data.Status.ValueString()))
 	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to update VM status: %s", err))
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed while waiting for vm to be in status %s: %s", data.Status.ValueString(), err),
+		)
 		return
 	}
 
@@ -195,7 +209,7 @@ func (r *VmStateResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("vm_id"), req, resp)
 }
 
-func waitForVmStatus(ctx context.Context, client *client.Client, id int, status string) error {
+func waitForVmStatus(ctx context.Context, client *client.ClientWithResponses, id int, status client.VirtualMachineStatus) error {
 	timeout := time.After(5 * time.Minute)    // 5 minutes timeout
 	ticker := time.NewTicker(5 * time.Second) // Check every 10 seconds
 	defer ticker.Stop()
@@ -207,11 +221,11 @@ func waitForVmStatus(ctx context.Context, client *client.Client, id int, status 
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for VM status to become '%s'", status)
 		case <-ticker.C:
-			vm, _, err := client.VmsService.GetVm(id)
+			vm, err := client.GetVmWithResponse(ctx, id)
 			if err != nil {
 				return err
 			}
-			if vm.Status == status {
+			if *vm.JSON200.Status == status {
 				return nil
 			}
 		}
