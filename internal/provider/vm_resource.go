@@ -39,6 +39,7 @@ type VmResourceModel struct {
 	VmiId                   types.Int64  `tfsdk:"vmi_id"`
 	HostId                  types.Int64  `tfsdk:"host_id"`
 	RootVolumeSizeGigabytes types.Int64  `tfsdk:"root_volume_size_gigabytes"`
+	UserData                types.String `tfsdk:"user_data"`
 }
 
 func (r *VmResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -100,6 +101,13 @@ func (r *VmResource) Schema(ctx context.Context, req resource.SchemaRequest, res
 					int64planmodifier.RequiresReplace(),
 				},
 			},
+			"user_data": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Vm cloud init user data",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 	}
 }
@@ -141,6 +149,10 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		VmiId:                   int(data.VmiId.ValueInt64()),
 		HostId:                  int(data.HostId.ValueInt64()),
 		RootVolumeSizeGigabytes: int(data.RootVolumeSizeGigabytes.ValueInt64()),
+	}
+
+	if data.UserData.ValueString() != "" {
+		createOptions.UserData = data.UserData.ValueStringPointer()
 	}
 
 	vm, err := r.client.CreateVmWithResponse(ctx, createOptions)
