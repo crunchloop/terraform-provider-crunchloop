@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/crunchloop/crunchloop",
+		Address: "registry.terraform.io/bilby91/crunchloop",
 		Debug:   debug,
 	}
 

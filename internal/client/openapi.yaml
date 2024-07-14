@@ -44,6 +44,8 @@ paths:
                 ssh_key:
                   type: string
                   example: ssh-rsa AAAAB3NzaC1y....
+                user_data:
+                  type: string
               required:
                 - name
                 - host_id

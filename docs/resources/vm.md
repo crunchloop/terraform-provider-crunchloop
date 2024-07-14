@@ -16,7 +16,7 @@ Vm resource
 terraform {
   required_providers {
     crunchloop = {
-      source = "registry.terraform.io/crunchloop/crunchloop"
+      source = "bilby91/crunchloop"
     }
   }
 }
@@ -40,6 +40,7 @@ resource "crunchloop_vm" "default" {
   cores                      = 1
   memory_megabytes           = 1024
   root_volume_size_gigabytes = 10
+  user_data                  = "echo 'Hello, World!'"
 }
 ```
 
@@ -53,6 +54,7 @@ resource "crunchloop_vm" "default" {
 - `memory_megabytes` (Number) Vm memory in megabytes
 - `name` (String) Vm name
 - `root_volume_size_gigabytes` (Number) Vm root volume size in gigabytes
+- `user_data` (String) Vm cloud init user data
 - `vmi_id` (Number) Vm Vmi id
 
 ### Read-Only

@@ -131,6 +131,7 @@ type CreateVmJSONBody struct {
 	Name                    string  `json:"name"`
 	RootVolumeSizeGigabytes int     `json:"root_volume_size_gigabytes"`
 	SshKey                  *string `json:"ssh_key,omitempty"`
+	UserData                *string `json:"user_data,omitempty"`
 	VmiId                   int     `json:"vmi_id"`
 }
 

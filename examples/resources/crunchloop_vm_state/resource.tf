@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     crunchloop = {
-      source = "registry.terraform.io/crunchloop/crunchloop"
+      source = "bilby91/crunchloop"
     }
   }
 }
