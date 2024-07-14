@@ -162,7 +162,7 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	// User expects the VM to be running, so wait for it to be running
-	err = waitForVmStatus(ctx, r.client, int(*vm.JSON201.Id), "running")
+	err = waitForVmStatus(ctx, r.client, *vm.JSON201.Id, "running")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Error",
@@ -249,13 +249,13 @@ func (r *VmResource) ImportState(ctx context.Context, req resource.ImportStateRe
 }
 
 func (d *VmResourceModel) vmModelToStateResource(vm *client.VirtualMachine) {
-	d.Id = types.StringValue(strconv.Itoa(int(*vm.Id)))
+	d.Id = types.StringValue(strconv.Itoa(*vm.Id))
 	d.Name = types.StringValue(*vm.Name)
 	d.MemoryMegabytes = types.Int64Value(int64(bytesToMegabytes(*vm.MemoryBytes)))
 	d.Cores = types.Int64Value(int64(*vm.Cores))
 	d.VmiId = types.Int64Value(int64(*vm.Vmi.Id))
 	d.HostId = types.Int64Value(int64(*vm.Host.Id))
-	d.RootVolumeSizeGigabytes = types.Int64Value(int64(bytesToGigabytes(int64(*vm.RootVolume.SizeBytes))))
+	d.RootVolumeSizeGigabytes = types.Int64Value(bytesToGigabytes(int64(*vm.RootVolume.SizeBytes)))
 }
 
 func bytesToMegabytes(bytes int) int {
