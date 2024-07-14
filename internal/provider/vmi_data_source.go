@@ -89,7 +89,7 @@ func (d *VmiDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 
 	for _, vmi := range *response.JSON200.Data {
 		if *vmi.Name == data.Name.ValueString() {
-			data.Id = types.StringValue(strconv.Itoa(int(*vmi.Id)))
+			data.Id = types.StringValue(strconv.Itoa(*vmi.Id))
 			data.Name = types.StringValue(*vmi.Name)
 
 			// Write logs using the tflog package

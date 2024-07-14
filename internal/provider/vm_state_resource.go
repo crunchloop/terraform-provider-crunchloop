@@ -122,7 +122,7 @@ func (r *VmStateResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	data.VmId = types.StringValue(strconv.Itoa(int(*vmResponse.JSON200.Id)))
+	data.VmId = types.StringValue(strconv.Itoa(*vmResponse.JSON200.Id))
 	data.Status = types.StringValue(string(*vmResponse.JSON200.Status))
 
 	// Save updated data into Terraform state
