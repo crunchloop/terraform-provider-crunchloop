@@ -155,7 +155,7 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		createOptions.UserData = data.UserData.ValueStringPointer()
 	}
 
-	vm, err := r.client.CreateVmWithResponse(ctx, createOptions)
+	vmResponse, err := r.client.CreateVmWithResponse(ctx, createOptions)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Error",
@@ -164,7 +164,15 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	data.vmModelToStateResource(vm.JSON201)
+	if vmResponse.StatusCode() != 201 {
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to create vm. Response body: %s", vmResponse.Body),
+		)
+		return
+	}
+
+	data.vmModelToStateResource(vmResponse.JSON201)
 
 	// Write logs using the tflog package
 	// Documentation: https://terraform.io/plugin/log
@@ -174,12 +182,13 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	// User expects the VM to be running, so wait for it to be running
-	err = waitForVmStatus(ctx, r.client, *vm.JSON201.Id, "running")
+	err = waitForVmStatus(ctx, r.client, *vmResponse.JSON201.Id, "running")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Error",
 			fmt.Sprintf("Failed while waiting for vm to be running: %s", err),
 		)
+		return
 	}
 }
 
@@ -200,6 +209,14 @@ func (r *VmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		resp.Diagnostics.AddError(
 			"API Error",
 			fmt.Sprintf("Failed to get vm: %s", err),
+		)
+		return
+	}
+
+	if vm.StatusCode() != 200 {
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to get vm. Response body: %s", vm.Body),
 		)
 		return
 	}
