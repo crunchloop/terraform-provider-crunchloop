@@ -40,7 +40,7 @@ resource "crunchloop_vm" "default" {
   cores                      = 1
   memory_megabytes           = 1024
   root_volume_size_gigabytes = 10
-  user_data                  = "echo 'Hello, World!'"
+  user_data                  = base64encode("echo 'Hello, World!'")
 }
 ```
 
@@ -49,14 +49,18 @@ resource "crunchloop_vm" "default" {
 
 ### Required
 
-- `cores` (Number) Vm cores
-- `host_id` (Number) Vm Host id
-- `memory_megabytes` (Number) Vm memory in megabytes
-- `name` (String) Vm name
-- `root_volume_size_gigabytes` (Number) Vm root volume size in gigabytes
-- `user_data` (String) Vm cloud init user data
-- `vmi_id` (Number) Vm Vmi id
+- `cores` (Number) Virtual CPU cores
+- `host_id` (Number) Identifier of the Host where the Vm will be created
+- `memory_megabytes` (Number) Memory (MiB)
+- `name` (String) Name of the Vm
+- `root_volume_size_gigabytes` (Number) Root volume size (GiB)
+- `vmi_id` (Number) Identifier of the VMI to use for the Vm
+
+### Optional
+
+- `ssh_key` (String) Ssh public key to authenticate with the Vm
+- `user_data` (String) Cloud init user data shell script, base64 encoded
 
 ### Read-Only
 
-- `id` (String) Vm identifier
+- `id` (String) Identifier

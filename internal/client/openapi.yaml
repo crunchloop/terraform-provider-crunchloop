@@ -28,16 +28,19 @@ paths:
                   example: 20
                 cores:
                   type: integer
+                  format: int32
                   example: 1
                   minimum: 1
                   maximum: 2
                 memory_megabytes:
                   type: integer
+                  format: int32
                   example: 1024
                   minimum: 128
                   maximum: 1024
                 root_volume_size_gigabytes:
                   type: integer
+                  format: int32
                   example: 10
                   minimum: 5
                   maximum: 50
@@ -87,6 +90,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/VirtualMachine'
               example:
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    put:
+      summary: Update virtual machine
+      operationId: updateVm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cores:
+                  type: integer
+                  format: int32
+                  example: 1
+                  minimum: 1
+                  maximum: 2
+                memory_megabytes:
+                  type: integer
+                  format: int32
+                  example: 1024
+                  minimum: 128
+                  maximum: 1024
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+              example:
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Not Found
           content:
@@ -220,14 +273,17 @@ components:
           enum:
             - stopped
             - creating
+            - updating
             - running
             - suspended
             - deleting
         cores:
           type: integer
+          format: int32
           example: 1
         memory_bytes:
           type: integer
+          format: int64
           example: 1073741824
         vmi:
           $ref: '#/components/schemas/VirtualMachineImage'
@@ -281,6 +337,7 @@ components:
           example: swagger-vol
         size_bytes:
           type: integer
+          format: int64
           example: 10737418240
         status:
           type: string
@@ -290,7 +347,6 @@ components:
            - available
            - deleting
           example: in_use
-
     NetworkInterface:
       type: object
       properties:

@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -34,12 +35,13 @@ type VmResource struct {
 type VmResourceModel struct {
 	Id                      types.String `tfsdk:"id"`
 	Name                    types.String `tfsdk:"name"`
-	MemoryMegabytes         types.Int64  `tfsdk:"memory_megabytes"`
-	Cores                   types.Int64  `tfsdk:"cores"`
+	MemoryMegabytes         types.Int32  `tfsdk:"memory_megabytes"`
+	Cores                   types.Int32  `tfsdk:"cores"`
 	VmiId                   types.Int64  `tfsdk:"vmi_id"`
 	HostId                  types.Int64  `tfsdk:"host_id"`
-	RootVolumeSizeGigabytes types.Int64  `tfsdk:"root_volume_size_gigabytes"`
+	RootVolumeSizeGigabytes types.Int32  `tfsdk:"root_volume_size_gigabytes"`
 	UserData                types.String `tfsdk:"user_data"`
+	SshKey                  types.String `tfsdk:"ssh_key"`
 }
 
 func (r *VmResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -54,58 +56,59 @@ func (r *VmResource) Schema(ctx context.Context, req resource.SchemaRequest, res
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Vm identifier",
+				MarkdownDescription: "Identifier",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Vm name",
+				MarkdownDescription: "Name of the Vm",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"memory_megabytes": schema.Int64Attribute{
+			"memory_megabytes": schema.Int32Attribute{
 				Required:            true,
-				MarkdownDescription: "Vm memory in megabytes",
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
+				MarkdownDescription: "Memory (MiB)",
 			},
-			"cores": schema.Int64Attribute{
+			"cores": schema.Int32Attribute{
 				Required:            true,
-				MarkdownDescription: "Vm cores",
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
+				MarkdownDescription: "Virtual CPU cores",
 			},
 			"vmi_id": schema.Int64Attribute{
 				Required:            true,
-				MarkdownDescription: "Vm Vmi id",
+				MarkdownDescription: "Identifier of the VMI to use for the Vm",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplace(),
 				},
 			},
 			"host_id": schema.Int64Attribute{
 				Required:            true,
-				MarkdownDescription: "Vm Host id",
+				MarkdownDescription: "Identifier of the Host where the Vm will be created",
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"root_volume_size_gigabytes": schema.Int64Attribute{
+			"root_volume_size_gigabytes": schema.Int32Attribute{
 				Required:            true,
-				MarkdownDescription: "Vm root volume size in gigabytes",
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
+				MarkdownDescription: "Root volume size (GiB)",
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.RequiresReplace(),
+				},
+			},
+			"ssh_key": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Ssh public key to authenticate with the Vm",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"user_data": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Vm cloud init user data",
+				Optional:            true,
+				MarkdownDescription: "Cloud init user data shell script, base64 encoded",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
@@ -144,15 +147,19 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 
 	createOptions := client.CreateVmJSONRequestBody{
 		Name:                    data.Name.ValueString(),
-		MemoryMegabytes:         int(data.MemoryMegabytes.ValueInt64()),
-		Cores:                   int(data.Cores.ValueInt64()),
+		MemoryMegabytes:         data.MemoryMegabytes.ValueInt32(),
+		Cores:                   data.Cores.ValueInt32(),
 		VmiId:                   int(data.VmiId.ValueInt64()),
 		HostId:                  int(data.HostId.ValueInt64()),
-		RootVolumeSizeGigabytes: int(data.RootVolumeSizeGigabytes.ValueInt64()),
+		RootVolumeSizeGigabytes: data.RootVolumeSizeGigabytes.ValueInt32(),
 	}
 
 	if data.UserData.ValueString() != "" {
 		createOptions.UserData = data.UserData.ValueStringPointer()
+	}
+
+	if data.SshKey.ValueString() != "" {
+		createOptions.SshKey = data.SshKey.ValueStringPointer()
 	}
 
 	vmResponse, err := r.client.CreateVmWithResponse(ctx, createOptions)
@@ -172,15 +179,6 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	data.vmModelToStateResource(vmResponse.JSON201)
-
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "created a resource")
-
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
 	// User expects the VM to be running, so wait for it to be running
 	err = waitForVmStatus(ctx, r.client, *vmResponse.JSON201.Id, "running")
 	if err != nil {
@@ -190,6 +188,15 @@ func (r *VmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		)
 		return
 	}
+
+	data.vmModelToStateResource(vmResponse.JSON201)
+
+	// Write logs using the tflog package
+	// Documentation: https://terraform.io/plugin/log
+	tflog.Trace(ctx, "created a resource")
+
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *VmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -237,6 +244,65 @@ func (r *VmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
+	updateOptions := client.UpdateVmJSONRequestBody{
+		MemoryMegabytes: data.MemoryMegabytes.ValueInt32Pointer(),
+		Cores:           data.Cores.ValueInt32Pointer(),
+	}
+
+	// Parse the vm id
+	id, _ := strconv.Atoi(data.Id.ValueString())
+
+	vmUpdateResponse, err := r.client.UpdateVmWithResponse(ctx, id, updateOptions)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to update vm: %s", err),
+		)
+		return
+	}
+
+	if vmUpdateResponse.StatusCode() != 200 {
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to update vm. Response body: %s", vmUpdateResponse.Body),
+		)
+		return
+	}
+
+	// Updating the VM can take some time, so wait for it to be running
+	// before updating the state.
+	err = waitForVmStatus(ctx, r.client, *vmUpdateResponse.JSON200.Id, "running")
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed while waiting for vm to update: %s", err),
+		)
+		return
+	}
+
+	vmResponse, err := r.client.GetVmWithResponse(ctx, id)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to get vm: %s", err),
+		)
+		return
+	}
+
+	if vmResponse.StatusCode() != 200 {
+		resp.Diagnostics.AddError(
+			"API Error",
+			fmt.Sprintf("Failed to get vm. Response body: %s", vmResponse.Body),
+		)
+		return
+	}
+
+	data.vmModelToStateResource(vmResponse.JSON200)
+
+	// Write logs using the tflog package
+	// Documentation: https://terraform.io/plugin/log
+	tflog.Trace(ctx, "updated a resource")
+
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -280,19 +346,19 @@ func (r *VmResource) ImportState(ctx context.Context, req resource.ImportStateRe
 func (d *VmResourceModel) vmModelToStateResource(vm *client.VirtualMachine) {
 	d.Id = types.StringValue(strconv.Itoa(*vm.Id))
 	d.Name = types.StringValue(*vm.Name)
-	d.MemoryMegabytes = types.Int64Value(int64(bytesToMegabytes(*vm.MemoryBytes)))
-	d.Cores = types.Int64Value(int64(*vm.Cores))
 	d.VmiId = types.Int64Value(int64(*vm.Vmi.Id))
 	d.HostId = types.Int64Value(int64(*vm.Host.Id))
-	d.RootVolumeSizeGigabytes = types.Int64Value(bytesToGigabytes(int64(*vm.RootVolume.SizeBytes)))
+	d.MemoryMegabytes = types.Int32Value(bytesToMegabytes(*vm.MemoryBytes))
+	d.Cores = types.Int32Value(*vm.Cores)
+	d.RootVolumeSizeGigabytes = types.Int32Value(bytesToGigabytes(*vm.RootVolume.SizeBytes))
 }
 
-func bytesToMegabytes(bytes int) int {
-	return bytes / 1024 / 1024
+func bytesToMegabytes(bytes int64) int32 {
+	return int32(bytes / 1024 / 1024)
 }
 
-func bytesToGigabytes(bytes int64) int64 {
-	return bytes / 1024 / 1024 / 1024
+func bytesToGigabytes(bytes int64) int32 {
+	return int32(bytes / 1024 / 1024 / 1024)
 }
 
 func waitForVmDeletion(ctx context.Context, client *client.ClientWithResponses, id int) error {
