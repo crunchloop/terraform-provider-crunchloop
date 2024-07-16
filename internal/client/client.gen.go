@@ -35,6 +35,7 @@ const (
 	VirtualMachineStatusRunning   VirtualMachineStatus = "running"
 	VirtualMachineStatusStopped   VirtualMachineStatus = "stopped"
 	VirtualMachineStatusSuspended VirtualMachineStatus = "suspended"
+	VirtualMachineStatusUpdating  VirtualMachineStatus = "updating"
 )
 
 // Defines values for VolumeStatus.
@@ -82,10 +83,10 @@ type NetworkInterface struct {
 
 // VirtualMachine defines model for VirtualMachine.
 type VirtualMachine struct {
-	Cores       *int                  `json:"cores,omitempty"`
+	Cores       *int32                `json:"cores,omitempty"`
 	Host        *Host                 `json:"host,omitempty"`
 	Id          *int                  `json:"id,omitempty"`
-	MemoryBytes *int                  `json:"memory_bytes,omitempty"`
+	MemoryBytes *int64                `json:"memory_bytes,omitempty"`
 	Name        *string               `json:"name,omitempty"`
 	Nic         *NetworkInterface     `json:"nic,omitempty"`
 	Object      *string               `json:"object,omitempty"`
@@ -116,7 +117,7 @@ type Volume struct {
 	Id        *int          `json:"id,omitempty"`
 	Name      *string       `json:"name,omitempty"`
 	Object    *string       `json:"object,omitempty"`
-	SizeBytes *int          `json:"size_bytes,omitempty"`
+	SizeBytes *int64        `json:"size_bytes,omitempty"`
 	Status    *VolumeStatus `json:"status,omitempty"`
 }
 
@@ -125,18 +126,27 @@ type VolumeStatus string
 
 // CreateVmJSONBody defines parameters for CreateVm.
 type CreateVmJSONBody struct {
-	Cores                   int     `json:"cores"`
+	Cores                   int32   `json:"cores"`
 	HostId                  int     `json:"host_id"`
-	MemoryMegabytes         int     `json:"memory_megabytes"`
+	MemoryMegabytes         int32   `json:"memory_megabytes"`
 	Name                    string  `json:"name"`
-	RootVolumeSizeGigabytes int     `json:"root_volume_size_gigabytes"`
+	RootVolumeSizeGigabytes int32   `json:"root_volume_size_gigabytes"`
 	SshKey                  *string `json:"ssh_key,omitempty"`
 	UserData                *string `json:"user_data,omitempty"`
 	VmiId                   int     `json:"vmi_id"`
 }
 
+// UpdateVmJSONBody defines parameters for UpdateVm.
+type UpdateVmJSONBody struct {
+	Cores           *int32 `json:"cores,omitempty"`
+	MemoryMegabytes *int32 `json:"memory_megabytes,omitempty"`
+}
+
 // CreateVmJSONRequestBody defines body for CreateVm for application/json ContentType.
 type CreateVmJSONRequestBody CreateVmJSONBody
+
+// UpdateVmJSONRequestBody defines body for UpdateVm for application/json ContentType.
+type UpdateVmJSONRequestBody UpdateVmJSONBody
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -228,6 +238,11 @@ type ClientInterface interface {
 	// GetVm request
 	GetVm(ctx context.Context, id int, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UpdateVmWithBody request with any body
+	UpdateVmWithBody(ctx context.Context, id int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateVm(ctx context.Context, id int, body UpdateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartVm request
 	StartVm(ctx context.Context, id int, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -297,6 +312,30 @@ func (c *Client) DeleteVm(ctx context.Context, id int, reqEditors ...RequestEdit
 
 func (c *Client) GetVm(ctx context.Context, id int, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetVmRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateVmWithBody(ctx context.Context, id int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateVmRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateVm(ctx context.Context, id int, body UpdateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateVmRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -493,6 +532,53 @@ func NewGetVmRequest(server string, id int) (*http.Request, error) {
 	return req, nil
 }
 
+// NewUpdateVmRequest calls the generic UpdateVm builder with application/json body
+func NewUpdateVmRequest(server string, id int, body UpdateVmJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateVmRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewUpdateVmRequestWithBody generates requests for UpdateVm with any type of body
+func NewUpdateVmRequestWithBody(server string, id int, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("api/v1/vms/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewStartVmRequest generates requests for StartVm
 func NewStartVmRequest(server string, id int) (*http.Request, error) {
 	var err error
@@ -621,6 +707,11 @@ type ClientWithResponsesInterface interface {
 	// GetVmWithResponse request
 	GetVmWithResponse(ctx context.Context, id int, reqEditors ...RequestEditorFn) (*GetVmResponse, error)
 
+	// UpdateVmWithBodyWithResponse request with any body
+	UpdateVmWithBodyWithResponse(ctx context.Context, id int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateVmResponse, error)
+
+	UpdateVmWithResponse(ctx context.Context, id int, body UpdateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateVmResponse, error)
+
 	// StartVmWithResponse request
 	StartVmWithResponse(ctx context.Context, id int, reqEditors ...RequestEditorFn) (*StartVmResponse, error)
 
@@ -741,6 +832,30 @@ func (r GetVmResponse) StatusCode() int {
 	return 0
 }
 
+type UpdateVmResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *VirtualMachine
+	JSON400      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateVmResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateVmResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type StartVmResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -840,6 +955,23 @@ func (c *ClientWithResponses) GetVmWithResponse(ctx context.Context, id int, req
 		return nil, err
 	}
 	return ParseGetVmResponse(rsp)
+}
+
+// UpdateVmWithBodyWithResponse request with arbitrary body returning *UpdateVmResponse
+func (c *ClientWithResponses) UpdateVmWithBodyWithResponse(ctx context.Context, id int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateVmResponse, error) {
+	rsp, err := c.UpdateVmWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateVmResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateVmWithResponse(ctx context.Context, id int, body UpdateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateVmResponse, error) {
+	rsp, err := c.UpdateVm(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateVmResponse(rsp)
 }
 
 // StartVmWithResponse request returning *StartVmResponse
@@ -998,6 +1130,46 @@ func ParseGetVmResponse(rsp *http.Response) (*GetVmResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateVmResponse parses an HTTP response from a UpdateVmWithResponse call
+func ParseUpdateVmResponse(rsp *http.Response) (*UpdateVmResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateVmResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest VirtualMachine
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error

@@ -25,5 +25,5 @@ resource "crunchloop_vm" "default" {
   cores                      = 1
   memory_megabytes           = 1024
   root_volume_size_gigabytes = 10
-  user_data                  = "echo 'Hello, World!'"
+  user_data                  = base64encode("echo 'Hello, World!'")
 }
