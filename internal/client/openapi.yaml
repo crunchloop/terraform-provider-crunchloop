@@ -22,9 +22,11 @@ paths:
                   example: swagger-vm
                 host_id:
                   type: integer
+                  format: int32
                   example: 10
                 vmi_id:
                   type: integer
+                  format: int32
                   example: 20
                 cores:
                   type: integer
@@ -51,7 +53,6 @@ paths:
                   type: string
               required:
                 - name
-                - host_id
                 - vmi_id
                 - cores
                 - memory_megabytes
@@ -70,7 +71,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   api/v1/vms/{id}:
     get:
       summary: Get virtual machine
@@ -81,6 +81,7 @@ paths:
           required: true
           schema:
             type: integer
+            format: int32
             example: 1
       responses:
         '200':
@@ -96,7 +97,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-    
     put:
       summary: Update virtual machine
       operationId: updateVm
@@ -106,6 +106,7 @@ paths:
           required: true
           schema:
             type: integer
+            format: int32
             example: 1
       requestBody:
         required: true
@@ -156,6 +157,7 @@ paths:
           required: true
           schema:
             type: integer
+            format: int32
       responses:
         '204':
           description: No Content
@@ -181,6 +183,7 @@ paths:
           required: true
           schema:
             type: integer
+            format: int32
       responses:
         '200':
           description: Ok
@@ -201,7 +204,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   api/v1/vms/{id}/stop:
     post:
       summary: Stop a virtual machine
@@ -212,6 +214,37 @@ paths:
           required: true
           schema:
             type: integer
+            format: int32
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  api/v1/vms/{id}/reboot:
+    post:
+      summary: Reboot a virtual machine
+      operationId: rebootVm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
       responses:
         '200':
           description: Ok
@@ -260,6 +293,7 @@ components:
       properties:
         id:
           type: integer
+          format: int32
           example: 1
         object:
           type: string
@@ -298,6 +332,7 @@ components:
       properties:
         id:
           type: integer
+          format: int32
           example: 1
         object:
           type: string
@@ -316,6 +351,7 @@ components:
       properties:
         id:
           type: integer
+          format: int32
           example: 1
         object:
           type: string
@@ -328,6 +364,7 @@ components:
       properties:
         id:
           type: integer
+          format: int32
           example: 1
         object:
           type: string
@@ -352,6 +389,7 @@ components:
       properties:
         id:
           type: integer
+          format: int32
           example: 1
         object:
           type: string
