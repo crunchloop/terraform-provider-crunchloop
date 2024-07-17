@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -89,14 +88,9 @@ func (d *VmiDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 
 	for _, vmi := range *response.JSON200.Data {
 		if *vmi.Name == data.Name.ValueString() {
-			data.Id = types.StringValue(strconv.Itoa(*vmi.Id))
+			data.Id = types.StringValue(strconv.Itoa(int(*vmi.Id)))
 			data.Name = types.StringValue(*vmi.Name)
 
-			// Write logs using the tflog package
-			// Documentation: https://terraform.io/plugin/log
-			tflog.Trace(ctx, "read Vmi data source")
-
-			// Save data into Terraform state
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 			return

@@ -89,7 +89,7 @@ func (d *HostDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 
 	for _, host := range *response.JSON200.Data {
 		if *host.Name == data.Name.ValueString() {
-			data.Id = types.StringValue(strconv.Itoa(*host.Id))
+			data.Id = types.StringValue(strconv.Itoa(int(*host.Id)))
 			data.Name = types.StringValue(*host.Name)
 
 			tflog.Trace(ctx, "read host data source")
