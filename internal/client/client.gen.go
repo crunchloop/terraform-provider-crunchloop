@@ -124,6 +124,21 @@ type Volume struct {
 // VolumeStatus defines model for Volume.Status.
 type VolumeStatus string
 
+// CreateProxmoxHostJSONBody defines parameters for CreateProxmoxHost.
+type CreateProxmoxHostJSONBody struct {
+	IpAddress   string  `json:"ip_address"`
+	Name        string  `json:"name"`
+	SshPassword *string `json:"ssh_password,omitempty"`
+	SshUsername *string `json:"ssh_username,omitempty"`
+}
+
+// CreateProxmoxVmiJSONBody defines parameters for CreateProxmoxVmi.
+type CreateProxmoxVmiJSONBody struct {
+	Name   string `json:"name"`
+	Sha256 string `json:"sha256"`
+	Url    string `json:"url"`
+}
+
 // CreateVmJSONBody defines parameters for CreateVm.
 type CreateVmJSONBody struct {
 	Cores                   int32   `json:"cores"`
@@ -138,9 +153,16 @@ type CreateVmJSONBody struct {
 
 // UpdateVmJSONBody defines parameters for UpdateVm.
 type UpdateVmJSONBody struct {
-	Cores           *int32 `json:"cores,omitempty"`
-	MemoryMegabytes *int32 `json:"memory_megabytes,omitempty"`
+	Cores           *int32  `json:"cores,omitempty"`
+	MemoryMegabytes *int32  `json:"memory_megabytes,omitempty"`
+	UserData        *string `json:"user_data,omitempty"`
 }
+
+// CreateProxmoxHostJSONRequestBody defines body for CreateProxmoxHost for application/json ContentType.
+type CreateProxmoxHostJSONRequestBody CreateProxmoxHostJSONBody
+
+// CreateProxmoxVmiJSONRequestBody defines body for CreateProxmoxVmi for application/json ContentType.
+type CreateProxmoxVmiJSONRequestBody CreateProxmoxVmiJSONBody
 
 // CreateVmJSONRequestBody defines body for CreateVm for application/json ContentType.
 type CreateVmJSONRequestBody CreateVmJSONBody
@@ -224,8 +246,18 @@ type ClientInterface interface {
 	// ListHosts request
 	ListHosts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateProxmoxHostWithBody request with any body
+	CreateProxmoxHostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateProxmoxHost(ctx context.Context, body CreateProxmoxHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListVmis request
 	ListVmis(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateProxmoxVmiWithBody request with any body
+	CreateProxmoxVmiWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateProxmoxVmi(ctx context.Context, body CreateProxmoxVmiJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateVmWithBody request with any body
 	CreateVmWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -265,8 +297,56 @@ func (c *Client) ListHosts(ctx context.Context, reqEditors ...RequestEditorFn) (
 	return c.Client.Do(req)
 }
 
+func (c *Client) CreateProxmoxHostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProxmoxHostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateProxmoxHost(ctx context.Context, body CreateProxmoxHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProxmoxHostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListVmis(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListVmisRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateProxmoxVmiWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProxmoxVmiRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateProxmoxVmi(ctx context.Context, body CreateProxmoxVmiJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProxmoxVmiRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +474,7 @@ func NewListHostsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/hosts")
+	operationPath := fmt.Sprintf("/api/v1/hosts")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -412,6 +492,46 @@ func NewListHostsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewCreateProxmoxHostRequest calls the generic CreateProxmoxHost builder with application/json body
+func NewCreateProxmoxHostRequest(server string, body CreateProxmoxHostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateProxmoxHostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateProxmoxHostRequestWithBody generates requests for CreateProxmoxHost with any type of body
+func NewCreateProxmoxHostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/hosts/proxmox")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListVmisRequest generates requests for ListVmis
 func NewListVmisRequest(server string) (*http.Request, error) {
 	var err error
@@ -421,7 +541,7 @@ func NewListVmisRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vmis")
+	operationPath := fmt.Sprintf("/api/v1/vmis")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -435,6 +555,46 @@ func NewListVmisRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewCreateProxmoxVmiRequest calls the generic CreateProxmoxVmi builder with application/json body
+func NewCreateProxmoxVmiRequest(server string, body CreateProxmoxVmiJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateProxmoxVmiRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateProxmoxVmiRequestWithBody generates requests for CreateProxmoxVmi with any type of body
+func NewCreateProxmoxVmiRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/vmis/proxmox")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -459,7 +619,7 @@ func NewCreateVmRequestWithBody(server string, contentType string, body io.Reade
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vms")
+	operationPath := fmt.Sprintf("/api/v1/vms")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -495,7 +655,7 @@ func NewDeleteVmRequest(server string, id int32) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vms/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/vms/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -529,7 +689,7 @@ func NewGetVmRequest(server string, id int32) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vms/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/vms/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -574,7 +734,7 @@ func NewUpdateVmRequestWithBody(server string, id int32, contentType string, bod
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vms/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/vms/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -610,7 +770,7 @@ func NewRebootVmRequest(server string, id int32) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vms/%s/reboot", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/vms/%s/reboot", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -644,7 +804,7 @@ func NewStartVmRequest(server string, id int32) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vms/%s/start", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/vms/%s/start", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -678,7 +838,7 @@ func NewStopVmRequest(server string, id int32) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("api/v1/vms/%s/stop", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/vms/%s/stop", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -742,8 +902,18 @@ type ClientWithResponsesInterface interface {
 	// ListHostsWithResponse request
 	ListHostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHostsResponse, error)
 
+	// CreateProxmoxHostWithBodyWithResponse request with any body
+	CreateProxmoxHostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProxmoxHostResponse, error)
+
+	CreateProxmoxHostWithResponse(ctx context.Context, body CreateProxmoxHostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProxmoxHostResponse, error)
+
 	// ListVmisWithResponse request
 	ListVmisWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListVmisResponse, error)
+
+	// CreateProxmoxVmiWithBodyWithResponse request with any body
+	CreateProxmoxVmiWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProxmoxVmiResponse, error)
+
+	CreateProxmoxVmiWithResponse(ctx context.Context, body CreateProxmoxVmiJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProxmoxVmiResponse, error)
 
 	// CreateVmWithBodyWithResponse request with any body
 	CreateVmWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateVmResponse, error)
@@ -793,6 +963,29 @@ func (r ListHostsResponse) StatusCode() int {
 	return 0
 }
 
+type CreateProxmoxHostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Host
+	JSON400      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateProxmoxHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateProxmoxHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListVmisResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -809,6 +1002,29 @@ func (r ListVmisResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListVmisResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateProxmoxVmiResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *VirtualMachineImage
+	JSON400      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateProxmoxVmiResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateProxmoxVmiResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -989,6 +1205,23 @@ func (c *ClientWithResponses) ListHostsWithResponse(ctx context.Context, reqEdit
 	return ParseListHostsResponse(rsp)
 }
 
+// CreateProxmoxHostWithBodyWithResponse request with arbitrary body returning *CreateProxmoxHostResponse
+func (c *ClientWithResponses) CreateProxmoxHostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProxmoxHostResponse, error) {
+	rsp, err := c.CreateProxmoxHostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProxmoxHostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateProxmoxHostWithResponse(ctx context.Context, body CreateProxmoxHostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProxmoxHostResponse, error) {
+	rsp, err := c.CreateProxmoxHost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProxmoxHostResponse(rsp)
+}
+
 // ListVmisWithResponse request returning *ListVmisResponse
 func (c *ClientWithResponses) ListVmisWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListVmisResponse, error) {
 	rsp, err := c.ListVmis(ctx, reqEditors...)
@@ -996,6 +1229,23 @@ func (c *ClientWithResponses) ListVmisWithResponse(ctx context.Context, reqEdito
 		return nil, err
 	}
 	return ParseListVmisResponse(rsp)
+}
+
+// CreateProxmoxVmiWithBodyWithResponse request with arbitrary body returning *CreateProxmoxVmiResponse
+func (c *ClientWithResponses) CreateProxmoxVmiWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProxmoxVmiResponse, error) {
+	rsp, err := c.CreateProxmoxVmiWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProxmoxVmiResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateProxmoxVmiWithResponse(ctx context.Context, body CreateProxmoxVmiJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProxmoxVmiResponse, error) {
+	rsp, err := c.CreateProxmoxVmi(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProxmoxVmiResponse(rsp)
 }
 
 // CreateVmWithBodyWithResponse request with arbitrary body returning *CreateVmResponse
@@ -1103,6 +1353,39 @@ func ParseListHostsResponse(rsp *http.Response) (*ListHostsResponse, error) {
 	return response, nil
 }
 
+// ParseCreateProxmoxHostResponse parses an HTTP response from a CreateProxmoxHostWithResponse call
+func ParseCreateProxmoxHostResponse(rsp *http.Response) (*CreateProxmoxHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateProxmoxHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Host
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListVmisResponse parses an HTTP response from a ListVmisWithResponse call
 func ParseListVmisResponse(rsp *http.Response) (*ListVmisResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -1123,6 +1406,39 @@ func ParseListVmisResponse(rsp *http.Response) (*ListVmisResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateProxmoxVmiResponse parses an HTTP response from a CreateProxmoxVmiWithResponse call
+func ParseCreateProxmoxVmiResponse(rsp *http.Response) (*CreateProxmoxVmiResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateProxmoxVmiResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest VirtualMachineImage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	}
 

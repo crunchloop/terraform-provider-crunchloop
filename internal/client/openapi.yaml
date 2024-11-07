@@ -3,13 +3,25 @@ info:
   title: Crunchloop Cloud Management API
   description: API for managing Crunchloop Cloud resources
   version: 0.0.1
+  contact:
+    name: Crunchloop
+    email: os@crunchloop.io
 servers:
   - url: https://cloud.crunchloop.io
+tags:
+  - name: Vm
+    description: Operations related to virtual machines
+  - name: Vmi
+    description: Operations related to virtual machine images
+  - name: Host
+    description: Operations related to hosts
 paths:
-  api/v1/vms:
+  /api/v1/vms:
     post:
       summary: Create a new virtual machine
+      description: Create a new virtual machine
       operationId: createVm
+      tags: [Vm]
       requestBody:
         required: true
         content:
@@ -71,10 +83,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  api/v1/vms/{id}:
+  /api/v1/vms/{id}:
     get:
       summary: Get virtual machine
+      description: Get a virtual machine by ID
       operationId: getVm
+      tags: [Vm]
       parameters:
         - name: id
           in: path
@@ -90,7 +104,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VirtualMachine'
-              example:
         '404':
           description: Not Found
           content:
@@ -99,7 +112,9 @@ paths:
                 $ref: '#/components/schemas/Error'
     put:
       summary: Update virtual machine
+      description: Update a virtual machine by ID
       operationId: updateVm
+      tags: [Vm]
       parameters:
         - name: id
           in: path
@@ -127,6 +142,8 @@ paths:
                   example: 1024
                   minimum: 128
                   maximum: 1024
+                user_data:
+                  type: string
       responses:
         '200':
           description: Ok
@@ -134,7 +151,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VirtualMachine'
-              example:
         '400':
           description: Bad Request
           content:
@@ -147,10 +163,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
     delete:
       summary: Delete a virtual machine
+      description: Delete a virtual machine by ID
       operationId: deleteVm
+      tags: [Vm]
       parameters:
         - name: id
           in: path
@@ -173,10 +190,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  api/v1/vms/{id}/start:
+  /api/v1/vms/{id}/start:
     post:
       summary: Start a virtual machine
+      description: Start a virtual machine by ID
       operationId: startVm
+      tags: [Vm]
       parameters:
         - name: id
           in: path
@@ -204,10 +223,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  api/v1/vms/{id}/stop:
+  /api/v1/vms/{id}/stop:
     post:
       summary: Stop a virtual machine
+      description: Stop a virtual machine by ID
       operationId: stopVm
+      tags: [Vm]
       parameters:
         - name: id
           in: path
@@ -234,10 +255,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  api/v1/vms/{id}/reboot:
+  /api/v1/vms/{id}/reboot:
     post:
       summary: Reboot a virtual machine
+      description: Reboot a virtual machine by ID
       operationId: rebootVm
+      tags: [Vm]
       parameters:
         - name: id
           in: path
@@ -264,10 +287,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  api/v1/hosts:
+  /api/v1/hosts:
     get:
       summary: List hosts
+      description: List all hosts
       operationId: listHosts
+      tags: [Host]
       responses:
         '200':
           description: Ok
@@ -275,10 +300,96 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HostCollection'
-  api/v1/vmis:
+  /api/v1/hosts/proxmox:
+    post:
+      summary: Create a new Proxmox host
+      description: Create a new Proxmox machine
+      operationId: createProxmoxHost
+      tags: [Host]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: beelink-01
+                ip_address:
+                  type: string
+                  example: '127.0.0.1'
+                ssh_username:
+                  type: string
+                  example: root
+                ssh_password:
+                  type: string
+                  example: "secretpassword"
+              required:
+                - name
+                - ip_address
+                - username
+                - password
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Host'
+
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/vmis/proxmox:
+    post:
+      summary: Create a new Proxmox virutal machine image
+      description: Create a new Proxmox virtual machine image
+      operationId: createProxmoxVmi
+      tags: [Vmi]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: ubuntu-jammy-server-amd64-20241002
+                url:
+                  type: string
+                  example: 'https://cloud-images.ubuntu.com/jammy/20241002/jammy-server-cloudimg-amd64.img'
+                sha256:
+                  type: string
+                  example: 55c687a9a242fab7b0ec89ac69f9def77696c4e160e6f640879a0b0031a08318
+              required:
+                - name
+                - url
+                - sha256
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachineImage'
+
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/vmis:
     get:
       summary: List virtual machine images
+      description: List all virtual machine images
       operationId: listVmis
+      tags: [Vmi]
       responses:
         '200':
           description: Ok
@@ -421,7 +532,7 @@ components:
           const: list
         has_more:
           type: boolean
-          example: boolean
+          example: true
         data:
           type: array
           items:
