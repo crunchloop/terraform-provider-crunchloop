@@ -107,9 +107,6 @@ func (r *VmResource) Schema(ctx context.Context, req resource.SchemaRequest, res
 			"user_data": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "Cloud init user data shell script, base64 encoded",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 		},
 	}
@@ -203,6 +200,7 @@ func (r *VmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	updateOptions := client.UpdateVmJSONRequestBody{
 		MemoryMegabytes: data.MemoryMegabytes.ValueInt32Pointer(),
 		Cores:           data.Cores.ValueInt32Pointer(),
+		UserData:        data.UserData.ValueStringPointer(),
 	}
 
 	// Parse the vm id
