@@ -51,7 +51,8 @@ resource "crunchloop_vm" "vm" {
 If you wish to contribute to the provider, follow these steps:
 
 1. Clone the repository
-2. Build the provider using Go: `go build ./...`
+2. Build the provider using Go: `go build -o terraform-provider-crunchloop`
+3. Use the `examples` folder to test managing resources with your instance
 
 ## Documentation
 

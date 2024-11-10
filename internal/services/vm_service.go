@@ -73,21 +73,6 @@ func (s *VmService) UpdateVm(ctx context.Context, id int32, options client.Updat
 		return nil, err
 	}
 
-	var wasRunning = *vm.Status == client.VirtualMachineStatusRunning
-
-	// We need to stop the vm if it's running to update it.
-	if wasRunning {
-		_, err = s.client.StopVm(ctx, id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to stop vm before updating. Error: %s", err)
-		}
-
-		err = utils.WaitForVmStatus(ctx, s.client, *vm.Id, "stopped")
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// We are ready to update the vm now.
 	updateResponse, err := s.client.UpdateVmWithResponse(ctx, id, options)
 	if err != nil {
@@ -99,25 +84,11 @@ func (s *VmService) UpdateVm(ctx context.Context, id int32, options client.Updat
 	}
 
 	// After we issue an update, the vm is going to transition to `updating` state
-	// and eventually will be back to `stopped` state, we need to wait for that
+	// and eventually will be back to `currentStatus` state, we need to wait for that
 	// state before moving forward.
-	err = utils.WaitForVmStatus(ctx, s.client, *vm.Id, "stopped")
+	err = utils.WaitForVmStatus(ctx, s.client, *vm.Id, *vm.Status)
 	if err != nil {
 		return nil, err
-	}
-
-	// If the vm was running we should turn it on again.
-	//
-	if wasRunning {
-		_, err = s.client.StartVm(ctx, id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to start vm after updating. Error: %s", err)
-		}
-
-		err = utils.WaitForVmStatus(ctx, s.client, *vm.Id, "running")
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	vm, err = s.GetVm(ctx, id)
